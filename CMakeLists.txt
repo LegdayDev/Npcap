@@ -15,9 +15,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # 실행 파일 생성 설정
 add_executable(${PROJECT_NAME}
-#        PcapRead.c
-        Ip.c
-#        Ethernet.c
+#        src/PcapRead.c
+        src/Ip.c
+#        src/Ethernet.c
 )
 
 # Npcap 헤더 파일 위치 지정
