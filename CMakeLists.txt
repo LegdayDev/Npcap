@@ -9,12 +9,16 @@ project(${PROJECT_NAME} C)
 
 # C11 표준을 사용하도록 설정
 set(CMAKE_C_STANDARD 11)
+
 # C11 표준 사용을 필수로 지정 (이전 버전으로 폴백하지 않음)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # 실행 파일 생성 설정
-add_executable(${PROJECT_NAME} Ip.c
-        )
+add_executable(${PROJECT_NAME}
+#        PcapRead.c
+        Ip.c
+#        Ethernet.c
+)
 
 # Npcap 헤더 파일 위치 지정
 target_include_directories(${PROJECT_NAME} PRIVATE "C:/npcap/Include")
