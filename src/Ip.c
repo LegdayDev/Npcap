@@ -1,72 +1,105 @@
-#include <stdio.h>
-#include <pcap.h>
-#include <time.h>
-#include <windows.h>  // TODO : CLion ì—ì„œëŠ” Windows ê°œë°œì„ ìœ„í•œ ê¸°ë³¸í—¤ë”ë“¤ì„ ìë™ìœ¼ë¡œ í¬í•¨í•˜ì§€ ì•Šê¸° ë•Œë¬¸ì— ì¶”ê°€í•´ì¤˜ì•¼ í•¨.
+#include <stdio.h>    // Ç¥ÁØ ÀÔÃâ·ÂÀ» À§ÇÑ Çì´õ
+#include <pcap.h>     // ÆĞÅ¶ Ä¸Ã³¸¦ À§ÇÑ PCAP ¶óÀÌºê·¯¸® Çì´õ
+#include <time.h>     // ½Ã°£ °ü·Ã ÇÔ¼ö¸¦ À§ÇÑ Çì´õ
+#include <windows.h>  // CLion ¿¡¼­´Â Windows °³¹ßÀ» À§ÇÑ ±âº»Çì´õµéÀ» ÀÚµ¿À¸·Î Æ÷ÇÔÇÏÁö ¾Ê±â ¶§¹®¿¡ Ãß°¡ÇØÁà¾ß ÇÔ.
+#include <WinSock2.h> // Windows ¼ÒÄÏ ÇÁ·Î±×·¡¹ÖÀ» À§ÇÑ Çì´õ (¹İµå½Ã windows.h µÚ¿¡ Æ÷ÇÔÇØ¾ß ÇÔ)
+#include <tchar.h>    // À¯´ÏÄÚµå/MBCS È£È¯À» À§ÇÑ TEXT ¸ÅÅ©·Î °ü·Ã Çì´õ
 
 #pragma comment(lib, "wpcap")
 #pragma comment(lib, "ws2_32")
 
-#include <tchar.h>
-#include <WinSock2.h>
 
-#pragma pack(push, 1)
-typedef struct EtherHeader {
-	unsigned char dstMac[6];
-	unsigned char srcMac[6];
-	unsigned short type;
+#pragma pack(push, 1) // ¸Ş¸ğ¸® Á¤·Ä¹æ½Ä ÁöÁ¤
+typedef struct EtherHeader { // Ethernet Çì´õ ±¸Á¶Ã¼ ¼±¾ğ
+	unsigned char dstMac[6]; // ¸ñÀûÁö ÁÖ¼Ò
+	unsigned char srcMac[6]; // Ãâ¹ßÁö ÁÖ¼Ò
+	unsigned short type;     // »óÀ§°èÃş ÇÁ·ÎÅäÄİ ºĞ¼®
 } EtherHeader;
 
-typedef struct IpHeader {
-	unsigned char verIhl;
-	unsigned char tos;
-	unsigned short length;
-	unsigned short id;
-	unsigned short fragOffset;
-	unsigned char ttl;
-	unsigned char protocol;
-	unsigned short checksum;
-	unsigned char srcIp[4];
-	unsigned char dstIp[4];
+typedef struct IpHeader {       // IP Çì´õ ±¸Á¶Ã¼ ¼±¾ğ
+	unsigned char verIhl;       // Version(IPv4 or IPV6) °ú IHL(Çì´õ±æÀÌ)
+	unsigned char tos;          // ÆĞÅ¶ÀÇ ¼­ºñ½º Ç°Áú
+	unsigned short length;      // ÆĞÅ¶ÀÇ ±æÀÌ
+	unsigned short id;          // ÆĞÅ¶ ´ÜÆíÈ­ ½Ã È°¿ëÇÏ´Â ÇÊµå
+	unsigned short fragOffset;  // ´ÜÆíÈ­ °ü·Ã ÇÊµå
+	unsigned char ttl;          // IPÆĞÅ¶ÀÌ ³×Æ®¿öÅ©¸¦ ÅëÇØ Àü´ŞµÉ ¼ö ÀÖ´Â ÃÖ´ë ½Ã°£À» ¼³Á¤ÇÏ´Â ÇÊµå
+	unsigned char protocol;     // »óÀ§ °èÃş ÇÁ·ÎÅäÄİ ½Äº°ÇÏ´Â ÇÊµå
+	unsigned short checksum;    // IP Çì´õ ¹«°á¼º °ËÁõ ÇÊµå
+	unsigned char srcIp[4];     // Ãâ¹ßÁö ÁÖ¼Ò
+	unsigned char dstIp[4];     // ¸ñÀûÁö ¼ö¼Ò
 } IpHeader;
-#pragma pack(pop)
+#pragma pack(pop) // ¸Ş¸ğ¸® Á¤·Ä¹æ½Ä ¿øº¹
 
+/*
+ * LoadNpcapDlls() : Npcap DLL ÆÄÀÏµéÀ» ·ÎµåÇÏ±â À§ÇÑ ÇÔ¼ö
+ */
 BOOL LoadNpcapDlls()
 {
+	// Windows ½Ã½ºÅÛ µğ·ºÅä¸® °æ·Î¸¦ ÀúÀåÇÒ ¹öÆÛ ¼±¾ğ
+	// _TCHAR´Â À¯´ÏÄÚµå/¸ÖÆ¼¹ÙÀÌÆ® È£È¯À» À§ÇÑ ¸ÅÅ©·Î Å¸ÀÔ
 	_TCHAR npcap_dir[512];
 	UINT len;
+
+	// Windows ½Ã½ºÅÛ µğ·ºÅä¸® °æ·Î¸¦ °¡Á®¿È (º¸Åë C:\Windows\System32)
+	// 480Àº ³ªÁß¿¡ "\Npcap" ¹®ÀÚ¿­À» ºÙÀÏ °ø°£À» °í·ÁÇÑ ±æÀÌ
 	len = GetSystemDirectory(npcap_dir, 480);
 	if (!len) {
+		// ½Ã½ºÅÛ µğ·ºÅä¸® °æ·Î¸¦ °¡Á®¿À´Âµ¥ ½ÇÆĞÇÏ¸é ¿¡·¯ Ãâ·Â
 		fprintf(stderr, "Error in GetSystemDirectory: %x", GetLastError());
 		return FALSE;
 	}
+
+	// ½Ã½ºÅÛ µğ·ºÅä¸® °æ·Î µÚ¿¡ "\Npcap" Ãß°¡
+	// _T ¸ÅÅ©·Î´Â ¹®ÀÚ¿­À» À¯´ÏÄÚµå/¸ÖÆ¼¹ÙÀÌÆ® È£È¯ Çü½ÄÀ¸·Î º¯È¯
 	_tcscat_s(npcap_dir, 512, _T("\\Npcap"));
+
+	// DLL °Ë»ö °æ·Î¿¡ Npcap µğ·ºÅä¸® Ãß°¡
+	// SetDllDirectory°¡ ½ÇÆĞÇÏ¸é (0À» ¹İÈ¯ÇÏ¸é) ¿¡·¯ Ã³¸®
 	if (SetDllDirectory(npcap_dir) == 0) {
 		fprintf(stderr, "Error in SetDllDirectory: %x", GetLastError());
 		return FALSE;
 	}
 
+	// ¸ğµç °úÁ¤ÀÌ ¼º°øÀûÀ¸·Î ¿Ï·áµÇ¸é TRUE ¹İÈ¯
 	return TRUE;
 }
 
 
-void packet_handler(u_char* param,
-	const struct pcap_pkthdr* header, const u_char* pkt_data)
+/*
+ * packet_handler() : ÆĞÅ¶ Ä¸ÃÄ Äİ¹é ÇÔ¼ö, ÆĞÅ¶ÀÌ Ä¸ÃÄµÉ ‹š¸¶´Ù È£ÃâµÊ.
+ *
+ * u_char* param : »ç¿ëÀÚ Á¤ÀÇ ¸Å°³ º¯¼ö(Äİ¹é ½Ã ³Ñ°ÜÁÜ)
+ * pacp_pkthdr* header : ÆĞÅ¶ÀÇ ¸ŞÅ¸µ¥ÀÌÅÍ(Äİ¹é ½Ã ³Ñ°ÜÁÜ)
+ * u_char* pkt_data : ½ÇÃ¼ Ä¸ÃÄµÈ ÆĞÅ¶ µ¥ÀÌÅÍ
+ */
+void packet_handler(
+	u_char* param,
+	const struct pcap_pkthdr* header,
+	const u_char* pkt_data)
 {
+	// ÆĞÅ¶ µ¥ÀÌÅÍ¸¦ Ehternet Çì´õ±¸Á¶Ã¼·Î Çüº¯È¯
 	EtherHeader* pEther = (EtherHeader*)pkt_data;
+
+	// Ethernet Çì´õÀÇ type ÇÊµå°¡ 0x0008(IPÇÁ·ÎÅäÄİ)ÀÌ ¾Æ´Ï¸é ÇÔ¼ö Á¾·á
 	if (pEther->type != 0x0008)
 		return;
 
+	// Ethernet Çì´õ ´ÙÀ½ Payload(IPÇì´õ)·Î °­Á¦ Çüº¯È¯, Ethernet Çì´õÀÇ ±æÀÌ¸¸Å­ ´õÇÑ ÈÄ Çüº¯È¯
 	IpHeader* pIpHeader = (IpHeader*)(pkt_data + sizeof(EtherHeader));
+
+	// IP ¹öÀü(»óÀ§ 4ºñÆ®)°ú IHL(ÇÏÀ§ 4ºñÆ®, Çì´õ ±æÀÌ), ÀüÃ¼ ÆĞÅ¶ ±æÀÌ Ãâ·Â
 	printf("IPv%d, IHL: %d, Total length: %d\n",
-		(pIpHeader->verIhl & 0xF0) >> 4,
-		(pIpHeader->verIhl & 0x0F) * 4,
-		ntohs(pIpHeader->length));
+		(pIpHeader->verIhl & 0xF0) >> 4, // IP ¹öÀü ÃßÃâ (»óÀ§ 4ºñÆ®)
+		(pIpHeader->verIhl & 0x0F) * 4,  // IHL ÃßÃâ (ÇÏÀ§ 4ºñÆ®) * 4¹ÙÀÌÆ®
+		ntohs(pIpHeader->length));       // ³×Æ®¿öÅ© ¹ÙÀÌÆ® ¼ø¼­¸¦ È£½ºÆ® ¹ÙÀÌÆ® ¼ø¼­·Î º¯È¯
 
+	// TTL(Time To Live), ÇÁ·ÎÅäÄİ ¹øÈ£, Ã¼Å©¼¶ Ãâ·Â
 	printf("TTL: %d, Protocol: %02X, Checksum: %04X\n",
-		pIpHeader->ttl,
-		pIpHeader->protocol,
-		ntohs(pIpHeader->checksum));
+		pIpHeader->ttl,                // ÆĞÅ¶ÀÇ ¼ö¸í
+		pIpHeader->protocol,           // »óÀ§ °èÃş ÇÁ·ÎÅäÄİ
+		ntohs(pIpHeader->checksum));   // IP Çì´õ Ã¼Å©¼¶
 
+	// Ãâ¹ßÁö IP¿Í ¸ñÀûÁö IP¸¦ Á¡ºĞÇÒ ½ÊÁø¼ö Çü½ÄÀ¸·Î Ãâ·Â
 	printf("%d.%d.%d.%d -> %d.%d.%d.%d\n",
 		pIpHeader->srcIp[0], pIpHeader->srcIp[1],
 		pIpHeader->srcIp[2], pIpHeader->srcIp[3],
@@ -77,82 +110,78 @@ void packet_handler(u_char* param,
 
 int main()
 {
-	pcap_if_t* alldevs;
-	pcap_if_t* d;
-	int inum;
-	int i = 0;
-	pcap_t* adhandle;
-	char errbuf[PCAP_ERRBUF_SIZE];
+    pcap_if_t* alldevs;  // ³×Æ®¿öÅ© ÀåÄ¡ ¸ñ·Ï
+    pcap_if_t* d;        // °³º° ³×Æ®¿öÅ© ÀåÄ¡
+    int inum;            // ¼±ÅÃÇÑ ÀåÄ¡ ¹øÈ£
+    int i = 0;
+    pcap_t* adhandle;    // ÆĞÅ¶ Ä¸Ã³ ÇÚµé
+    char errbuf[PCAP_ERRBUF_SIZE];  // ¿À·ù ¹öÆÛ
 
-	if (!LoadNpcapDlls())
-	{
-		fprintf(stderr, "Couldn't load Npcap\n");
-		exit(1);
-	}
+    // Npcap DLL ·Îµå
+    if (!LoadNpcapDlls())
+    {
+        fprintf(stderr, "NpcapÀ» ·ÎµåÇÒ ¼ö ¾ø½À´Ï´Ù.\n");
+        exit(1);
+    }
 
+    // ³×Æ®¿öÅ© ÀåÄ¡ ¸ñ·ÏÀ» °¡Á®¿À±â
+    if (pcap_findalldevs(&alldevs, errbuf) == -1)
+    {
+        fprintf(stderr, "pcap_findalldevs¿¡¼­ ¿À·ù ¹ß»ı: %s\n", errbuf);
+        exit(1);
+    }
 
-	/* Retrieve the device list */
-	if (pcap_findalldevs(&alldevs, errbuf) == -1)
-	{
-		fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
-		exit(1);
-	}
+    // ³×Æ®¿öÅ© ÀåÄ¡ ¸ñ·Ï Ãâ·Â
+    for (d = alldevs; d; d = d->next)
+    {
+        printf("%d. %s", ++i, d->name);  // ÀåÄ¡ ¹øÈ£¿Í ÀÌ¸§ Ãâ·Â
+        if (d->description)
+            printf(" (%s)\n", d->description);  // ÀåÄ¡ ¼³¸í Ãâ·Â
+        else
+            printf(" (¼³¸í ¾øÀ½)\n");  // ¼³¸íÀÌ ¾ø´Â °æ¿ì
+    }
 
-	/* Print the list */
-	for (d = alldevs; d; d = d->next)
-	{
-		printf("%d. %s", ++i, d->name);
-		if (d->description)
-			printf(" (%s)\n", d->description);
-		else
-			printf(" (No description available)\n");
-	}
+    if (i == 0)  // ÀåÄ¡°¡ ÇÏ³ªµµ ¾øÀ¸¸é ¿À·ù ¸Ş½ÃÁö Ãâ·Â
+    {
+        printf("\nÀÎÅÍÆäÀÌ½º°¡ ¾ø½À´Ï´Ù! NpcapÀÌ ¼³Ä¡µÇ¾î ÀÖ´ÂÁö È®ÀÎÇÏ¼¼¿ä.\n");
+        return -1;
+    }
 
-	if (i == 0)
-	{
-		printf("\nNo interfaces found! Make sure Npcap is installed.\n");
-		return -1;
-	}
+    // »ç¿ëÀÚ¿¡°Ô ÀåÄ¡ ¼±ÅÃ ¿äÃ»
+    printf("ÀÎÅÍÆäÀÌ½º ¹øÈ£¸¦ ÀÔ·ÂÇÏ¼¼¿ä (1-%d):", i);
+    scanf_s("%d", &inum);  // »ç¿ëÀÚ·ÎºÎÅÍ ÀÎÅÍÆäÀÌ½º ¹øÈ£ ÀÔ·Â
 
-	printf("Enter the interface number (1-%d):", i);
-	scanf_s("%d", &inum);
+    if (inum < 1 || inum > i)  // À¯È¿ÇÏÁö ¾ÊÀº ¹øÈ£ ÀÔ·Â ½Ã ¿À·ù ¸Ş½ÃÁö Ãâ·Â
+    {
+        printf("\nÀÎÅÍÆäÀÌ½º ¹øÈ£°¡ ¹üÀ§¸¦ ¹ş¾î³µ½À´Ï´Ù.\n");
+        pcap_freealldevs(alldevs);  // ÀåÄ¡ ¸ñ·Ï ÇØÁ¦
+        return -1;
+    }
 
-	if (inum < 1 || inum > i)
-	{
-		printf("\nInterface number out of range.\n");
-		/* Free the device list */
-		pcap_freealldevs(alldevs);
-		return -1;
-	}
+    // ¼±ÅÃÇÑ ÀåÄ¡·Î ÀÌµ¿
+    for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++);
 
-	/* Jump to the selected adapter */
-	for (d = alldevs, i = 0; i < inum - 1; d = d->next, i++);
+    // ÀåÄ¡ ¿­±â
+    if ((adhandle = pcap_open_live(d->name,  // ÀåÄ¡ ÀÌ¸§
+        65536,          // Ä¸Ã³ÇÒ ÆĞÅ¶ Å©±â (ÀüÃ¼ ÆĞÅ¶ Ä¸Ã³)
+        1,              // ÇÁ·Î¹Ì½ºÅ¥¾î½º ¸ğµå (1ÀÌ¸é ÇÁ·Î¹Ì½ºÅ¥¾î½º ¸ğµå È°¼ºÈ­)
+        1000,           // Å¸ÀÓ¾Æ¿ô (¹Ğ¸®ÃÊ ´ÜÀ§)
+        errbuf          // ¿À·ù ¹öÆÛ
+    )) == NULL)
+    {
+        fprintf(stderr, "\n¾î´ğÅÍ¸¦ ¿­ ¼ö ¾ø½À´Ï´Ù. %s´Â Npcap¿¡¼­ Áö¿øµÇÁö ¾Ê½À´Ï´Ù.\n", d->name);
+        pcap_freealldevs(alldevs);  // ÀåÄ¡ ¸ñ·Ï ÇØÁ¦
+        return -1;
+    }
 
-	/* Open the device */
-	/* Open the adapter */
-	if ((adhandle = pcap_open_live(d->name,	// name of the device
-		65536,			// portion of the packet to capture.
-		// 65536 grants that the whole packet will be captured on all the MACs.
-		1,				// promiscuous mode (nonzero means promiscuous)
-		1000,			// read timeout
-		errbuf			// error buffer
-	)) == NULL)
-	{
-		fprintf(stderr, "\nUnable to open the adapter. %s is not supported by Npcap\n", d->name);
-		/* Free the device list */
-		pcap_freealldevs(alldevs);
-		return -1;
-	}
+    printf("\n%s¿¡¼­ ÆĞÅ¶À» ¼ö½Å Áß...\n", d->description);  // ÆĞÅ¶ Ä¸Ã³ ½ÃÀÛ ¸Ş½ÃÁö Ãâ·Â
 
-	printf("\nlistening on %s...\n", d->description);
+    pcap_freealldevs(alldevs);  // ÀåÄ¡ ¸ñ·ÏÀº ´õ ÀÌ»ó ÇÊ¿ä ¾øÀ¸¹Ç·Î ÇØÁ¦
 
-	/* At this point, we don't need any more the device list. Free it */
-	pcap_freealldevs(alldevs);
+    // ÆĞÅ¶ Ä¸Ã³ ½ÃÀÛ
+    pcap_loop(adhandle, 0, packet_handler, NULL);  // ÆĞÅ¶ÀÌ µµÂøÇÒ ¶§¸¶´Ù packet_handler È£Ãâ
 
-	/* start the capture */
-	pcap_loop(adhandle, 0, packet_handler, NULL);
+    pcap_close(adhandle);  // ÆĞÅ¶ Ä¸Ã³ ÇÚµé ´İ±â
 
-	pcap_close(adhandle);
-
-	return 0;
+    return 0;
 }

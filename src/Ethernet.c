@@ -27,23 +27,38 @@ typedef struct EtherHeader {
 } EtherHeader;
 #pragma pack(pop)  // 구조체 메모리 정렬을 원래대로 복구
 
-// Npcap DLL을 로드하는 함수
+/*
+ * LoadNpcapDlls() : Npcap DLL 파일들을 로드하기 위한 함수
+ */
 BOOL LoadNpcapDlls()
 {
-    _TCHAR npcap_dir[512];  // Npcap이 설치된 디렉토리 경로를 저장할 배열
+    // Windows 시스템 디렉토리 경로를 저장할 버퍼 선언
+    // _TCHAR는 유니코드/멀티바이트 호환을 위한 매크로 타입
+    _TCHAR npcap_dir[512];
     UINT len;
-    len = GetSystemDirectory(npcap_dir, 480);  // 시스템 디렉토리 경로 가져오기
+
+    // Windows 시스템 디렉토리 경로를 가져옴 (보통 C:\Windows\System32)
+    // 480은 나중에 "\Npcap" 문자열을 붙일 공간을 고려한 길이
+    len = GetSystemDirectory(npcap_dir, 480);
     if (!len) {
-        fprintf(stderr, "GetSystemDirectory에서 오류 발생: %x", GetLastError());
-        return FALSE;  // 오류 발생 시 FALSE 반환
-    }
-    _tcscat_s(npcap_dir, 512, _T("\\Npcap"));  // Npcap 경로 추가
-    if (SetDllDirectory(npcap_dir) == 0) {  // DLL 디렉토리 설정
-        fprintf(stderr, "SetDllDirectory에서 오류 발생: %x", GetLastError());
-        return FALSE;  // 오류 발생 시 FALSE 반환
+        // 시스템 디렉토리 경로를 가져오는데 실패하면 에러 출력
+        fprintf(stderr, "Error in GetSystemDirectory: %x", GetLastError());
+        return FALSE;
     }
 
-    return TRUE;  // 성공적으로 Npcap을 로드한 경우 TRUE 반환
+    // 시스템 디렉토리 경로 뒤에 "\Npcap" 추가
+    // _T 매크로는 문자열을 유니코드/멀티바이트 호환 형식으로 변환
+    _tcscat_s(npcap_dir, 512, _T("\\Npcap"));
+
+    // DLL 검색 경로에 Npcap 디렉토리 추가
+    // SetDllDirectory가 실패하면 (0을 반환하면) 에러 처리
+    if (SetDllDirectory(npcap_dir) == 0) {
+        fprintf(stderr, "Error in SetDllDirectory: %x", GetLastError());
+        return FALSE;
+    }
+
+    // 모든 과정이 성공적으로 완료되면 TRUE 반환
+    return TRUE;
 }
 
 // 패킷 수신 후 처리하는 콜백 함수

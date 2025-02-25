@@ -1,37 +1,53 @@
-#include <stdio.h>
-#include <pcap.h>
-#include <time.h>
-#include <windows.h>  // TODO : CLion 에서는 Windows 개발을 위한 기본헤더들을 자동으로 포함하지 않기 때문에 추가해줘야 함.
+#include <stdio.h>    // 표준 입출력을 위한 헤더
+#include <pcap.h>     // 패킷 캡처를 위한 PCAP 라이브러리 헤더
+#include <time.h>     // 시간 관련 함수를 위한 헤더
+#include <windows.h>  // CLion 에서는 Windows 개발을 위한 기본헤더들을 자동으로 포함하지 않기 때문에 추가해줘야 함.
+#include <WinSock2.h> // Windows 소켓 프로그래밍을 위한 헤더 (반드시 windows.h 뒤에 포함해야 함)
+#include <tchar.h>    // 유니코드/MBCS 호환을 위한 TEXT 매크로 관련 헤더
 
 #pragma comment(lib, "wpcap")
 #pragma comment(lib, "ws2_32")
 
-#include <tchar.h>
-#include <WinSock2.h>
 
-#pragma pack(push, 1)
-typedef struct EtherHeader {
-	unsigned char dstMac[6];
-	unsigned char srcMac[6];
-	unsigned short type;
+#pragma pack(push, 1) // 메모리 정렬방식 지정
+typedef struct EtherHeader { // Ethernet 헤더 구조체 선언
+	unsigned char dstMac[6]; // 목적지 주소
+	unsigned char srcMac[6]; // 출발지 주소
+	unsigned short type;     // 상위계층 프로토콜 분석
 } EtherHeader;
 #pragma pack(pop)
 
+/*
+ * LoadNpcapDlls() : Npcap DLL 파일들을 로드하기 위한 함수
+ */
 BOOL LoadNpcapDlls()
 {
+	// Windows 시스템 디렉토리 경로를 저장할 버퍼 선언
+	// _TCHAR는 유니코드/멀티바이트 호환을 위한 매크로 타입
 	_TCHAR npcap_dir[512];
 	UINT len;
+
+	// Windows 시스템 디렉토리 경로를 가져옴 (보통 C:\Windows\System32)
+	// 480은 나중에 "\Npcap" 문자열을 붙일 공간을 고려한 길이
 	len = GetSystemDirectory(npcap_dir, 480);
 	if (!len) {
+		// 시스템 디렉토리 경로를 가져오는데 실패하면 에러 출력
 		fprintf(stderr, "Error in GetSystemDirectory: %x", GetLastError());
 		return FALSE;
 	}
+
+	// 시스템 디렉토리 경로 뒤에 "\Npcap" 추가
+	// _T 매크로는 문자열을 유니코드/멀티바이트 호환 형식으로 변환
 	_tcscat_s(npcap_dir, 512, _T("\\Npcap"));
+
+	// DLL 검색 경로에 Npcap 디렉토리 추가
+	// SetDllDirectory가 실패하면 (0을 반환하면) 에러 처리
 	if (SetDllDirectory(npcap_dir) == 0) {
 		fprintf(stderr, "Error in SetDllDirectory: %x", GetLastError());
 		return FALSE;
 	}
 
+	// 모든 과정이 성공적으로 완료되면 TRUE 반환
 	return TRUE;
 }
 
